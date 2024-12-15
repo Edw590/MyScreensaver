@@ -41,6 +41,7 @@
 // Modified by me, Edw590 in 2024.
 
 #include <windows.h>
+#include <stdio.h>
 #include "Utils/General.h"
 
 enum TScrMode {
@@ -52,6 +53,8 @@ enum TScrMode {
 enum TScrMode scr_mode_GL = MODE_NONE;
 HINSTANCE hInstance_GL = NULL;
 HWND hScrWindow_GL = NULL;
+
+int image_num_GL = 0;
 
 struct TSaverSettings {
 	HWND hwnd;
@@ -129,27 +132,42 @@ void EndDialog2() {
 }
 
 LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-	static HBITMAP hBitmap;
-	HDC hdc;
-	PAINTSTRUCT ps;
-	BITMAP bitmap;
-	HDC hdcMem;
-	HGDIOBJ oldBitmap;
+	static HBITMAP hBitmap = {0};
+	HDC hdc = NULL;
+	PAINTSTRUCT ps = {0};
+	BITMAP bitmap = {0};
+	HDC hdcMem = NULL;
+	HGDIOBJ oldBitmap = NULL;
 
 	switch (msg) {
 		case WM_CREATE: {
 			ss.hwnd = hwnd;
 
-			hBitmap = (HBITMAP) LoadImage(NULL, TEXT("C:\\Users\\Edw590\\CLionProjects\\MyScreensaver\\teste.bmp"),
-			                              IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+			SetTimer(hwnd, 0, 50, NULL);
+
+			return 0;
+		}
+		case WM_TIMER: {
+			image_num_GL++;
+			if (image_num_GL > 79) {
+				image_num_GL = 0;
+			}
+
+			InvalidateRect(hwnd, NULL, FALSE);
+
+			break;
+		}
+		case WM_PAINT: {
+			char images_path[255] = "C:\\Users\\Edw590\\CLionProjects\\MyScreensaver\\Images\\";
+			char result[255] = {0};
+			snprintf(result, sizeof(result), "%s%d.bmp", images_path, image_num_GL);
+
+			hBitmap = (HBITMAP) LoadImage(NULL, TEXT(result), IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
 
 			if (hBitmap == NULL) {
 				MessageBoxPrintf("Error", "Failed to load image");
 			}
 
-			return 0;
-		}
-		case WM_PAINT: {
 			hdc = BeginPaint(hwnd, &ps);
 
 			hdcMem = CreateCompatibleDC(hdc);
