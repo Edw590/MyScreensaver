@@ -40,9 +40,12 @@
 
 // Modified by me, Edw590 in 2024.
 
+#include <stdbool.h>
 #include <windows.h>
 #include <stdio.h>
 #include "Utils/General.h"
+
+#define MAX_MONITORS_EDW590 100
 
 enum TScrMode {
 	MODE_NONE,
@@ -52,7 +55,6 @@ enum TScrMode {
 };
 enum TScrMode scr_mode_GL = MODE_NONE;
 HINSTANCE hInstance_GL = NULL;
-HWND hScrWindow_GL = NULL;
 
 int image_num_GL = 0;
 
@@ -67,6 +69,17 @@ struct TSaverSettings {
 	BOOL  ReallyClose;     // for NT, so we know if a WM_CLOSE came from us or it.
 };
 struct TSaverSettings ss = {0};
+
+struct MonitorInfo {
+	HWND hWnd;
+	LONG x;
+	LONG y;
+	LONG width;
+	LONG height;
+};
+
+int num_monitors_GL = 0;
+struct MonitorInfo monitors_GL[MAX_MONITORS_EDW590] = {0};
 
 BOOL VerifyPassword(HWND hwnd) {
 	// Under NT, we return TRUE immediately. This lets the saver quit, and the system manages passwords.
@@ -143,7 +156,7 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 		case WM_CREATE: {
 			ss.hwnd = hwnd;
 
-			SetTimer(hwnd, 0, 50, NULL);
+			SetTimer(hwnd, 0, 33, NULL); // 30 FPS
 
 			return 0;
 		}
@@ -155,17 +168,18 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 
 			InvalidateRect(hwnd, NULL, FALSE);
 
-			break;
+			return 0;
 		}
 		case WM_PAINT: {
-			char images_path[255] = "C:\\Users\\Edw590\\CLionProjects\\MyScreensaver\\Images\\";
-			char result[255] = {0};
-			snprintf(result, sizeof(result), "%s%d.bmp", images_path, image_num_GL);
+			char cwd[MAX_PATH] = {0};
+			GetCurrentDirectory(sizeof(cwd), cwd);
+			char image_path[MAX_PATH] = {0};
+			snprintf(image_path, sizeof(image_path), "%s\\Edw590SCR\\%d.bmp", cwd, image_num_GL);
 
-			hBitmap = (HBITMAP) LoadImage(NULL, TEXT(result), IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+			hBitmap = (HBITMAP) LoadImage(NULL, TEXT(image_path), IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
 
 			if (hBitmap == NULL) {
-				MessageBoxPrintf("Error", "Failed to load image");
+				return 0;
 			}
 
 			hdc = BeginPaint(hwnd, &ps);
@@ -175,8 +189,21 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 
 			GetObject(hBitmap, sizeof(bitmap), &bitmap);
 
+			int monitor_width = 0;
+			int monitor_height = 0;
+			for (int i = 0; i < num_monitors_GL; i++) {
+				if (monitors_GL[i].hWnd == hwnd) {
+					monitor_width = monitors_GL[i].width;
+					monitor_height = monitors_GL[i].height;
+
+					break;
+				}
+			}
+
 			double aspect_ratio = (double) bitmap.bmWidth / bitmap.bmHeight;
-			StretchBlt(hdc, 0, 0, (int) (1080 * aspect_ratio), 1080, hdcMem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, SRCCOPY);
+			int image_width = (int) (monitor_height * aspect_ratio);
+			int x = monitor_width / 2 - image_width / 2;
+			StretchBlt(hdc, x, 0, image_width, monitor_height, hdcMem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, SRCCOPY);
 
 			SelectObject(hdcMem, oldBitmap);
 			DeleteDC(hdcMem);
@@ -243,7 +270,7 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 		}
 		case WM_CLOSE: {
 			if (scr_mode_GL == MODE_SAVER && ss.ReallyClose && !ss.IsDialogActive) {
-				BOOL CanClose=TRUE;
+				BOOL CanClose = TRUE;
 				if (GetTickCount() - ss.InitTime > 1000 * ss.PasswordDelay) {
 					StartDialog();
 					CanClose=VerifyPassword(hwnd);
@@ -278,6 +305,26 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 	return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
+BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
+	MONITORINFO info;
+	info.cbSize = sizeof(MONITORINFO);
+	GetMonitorInfo(hMonitor, &info);
+
+	struct MonitorInfo *monitor_info = &monitors_GL[num_monitors_GL];
+	monitor_info->x = info.rcMonitor.left;
+	monitor_info->y = info.rcMonitor.top;
+	monitor_info->width = info.rcMonitor.right - info.rcMonitor.left;
+	monitor_info->height = info.rcMonitor.bottom - info.rcMonitor.top;
+
+	num_monitors_GL++;
+
+	if (num_monitors_GL >= MAX_MONITORS_EDW590) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 void DoSaver(HWND hparwnd) {
 	WNDCLASS wnd_class;
 	wnd_class.style = CS_HREDRAW | CS_VREDRAW;
@@ -295,22 +342,27 @@ void DoSaver(HWND hparwnd) {
 		return;
 	}
 
+	HWND hScrWindow = NULL;
 	if (scr_mode_GL == MODE_PREVIEW) {
 		RECT rc;
 		GetWindowRect(hparwnd,&rc);
 		int cx = rc.right - rc.left;
 		int cy = rc.bottom - rc.top;
-		hScrWindow_GL = CreateWindowEx(0, "ScrClass", "Edw590", WS_CHILD | WS_VISIBLE, 0, 0, cx, cy, hparwnd, NULL,
-									   hInstance_GL, NULL);
+		hScrWindow = CreateWindowExA(0, "ScrClass", "Edw590", WS_CHILD | WS_VISIBLE, 0, 0, cx, cy, hparwnd, NULL,
+		                             hInstance_GL, NULL);
 	} else {
-		int cx = GetSystemMetrics(SM_CXSCREEN);
-		cx = 1000;
-		int cy = GetSystemMetrics(SM_CYSCREEN);
-		hScrWindow_GL = CreateWindowEx(WS_EX_TOPMOST, "ScrClass", "Edw590", WS_POPUP | WS_VISIBLE, 0, 0, cx, cy, NULL,
-									   NULL, hInstance_GL, NULL);
+		EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, 0);
+		for (int i = 0; i < num_monitors_GL; i++) {
+			struct MonitorInfo *monitor = &monitors_GL[i];
+			hScrWindow = CreateWindowExA(WS_EX_TOPMOST, "ScrClass", "Edw590", WS_POPUP | WS_VISIBLE, monitor->x,
+											monitor->y, monitor->width, monitor->height, NULL, NULL, hInstance_GL, NULL);
+			ShowWindow(hScrWindow, SW_SHOW);
+
+			monitor->hWnd = hScrWindow;
+		}
 	}
 
-	if (hScrWindow_GL == NULL) {
+	if (hScrWindow == NULL) {
 		return;
 	}
 
