@@ -38,12 +38,13 @@
 // 6. Changing the saver to implement your own password routine is easy under '95: all you have
 // to do is change the VerifyPassword routine. Under NT it's not really possible.
 
+// Original code obtained from: https://www.wischik.com/scr/howtoscr.html.
 // Modified by me, Edw590 in 2024.
 
-#include <stdbool.h>
-#include <windows.h>
 #include <stdio.h>
-#include "Utils/General.h"
+#include <windows.h>
+#include "GeneralUtils.h"
+#include "unzip.h"
 
 #define MAX_MONITORS_EDW590 100
 
@@ -71,7 +72,6 @@ struct TSaverSettings {
 struct TSaverSettings ss = {0};
 
 struct MonitorInfo {
-	HWND hWnd;
 	LONG x;
 	LONG y;
 	LONG width;
@@ -81,11 +81,37 @@ struct MonitorInfo {
 int num_monitors_GL = 0;
 struct MonitorInfo monitors_GL[MAX_MONITORS_EDW590] = {0};
 
+
+// The 2 functions below were copied from https://stackoverflow.com/a/8712996/8228163.
+__inline int c99_vsnprintf(char *outBuf, size_t size, const char *format, va_list ap) {
+    int count = -1;
+
+    if (size != 0) {
+	    count = _vsnprintf_s(outBuf, size, _TRUNCATE, format, ap);
+    }
+    if (count == -1) {
+	    count = _vscprintf(format, ap);
+    }
+
+    return count;
+}
+__inline int c99_snprintf(char *outBuf, size_t size, const char *format, ...) {
+    int count;
+    va_list ap;
+
+    va_start(ap, format);
+    count = c99_vsnprintf(outBuf, size, format, ap);
+    va_end(ap);
+
+    return count;
+}
+
+
 BOOL VerifyPassword(HWND hwnd) {
 	// Under NT, we return TRUE immediately. This lets the saver quit, and the system manages passwords.
 	// Under '95, we call VerifyScreenSavePwd. This checks the appropriate registry key and, if necessary, pops up a verify dialog
 	OSVERSIONINFO osv;
-	osv.dwOSVersionInfoSize=sizeof(osv);
+	osv.dwOSVersionInfoSize = sizeof(osv);
 	GetVersionEx(&osv);
 	if (osv.dwPlatformId == VER_PLATFORM_WIN32_NT) {
 		return TRUE;
@@ -144,19 +170,124 @@ void EndDialog2() {
 	GetCursorPos(&ss.InitCursorPos);
 }
 
+
+
+
+/*void writeToFile(char *str) {
+	HANDLE hFile = CreateFile("C:\\teste.txt",                // name of the write
+	                          FILE_APPEND_DATA,          // open for writing
+			                  0,                      // do not share
+			                  NULL,                   // default security
+			                  OPEN_ALWAYS,             // create new file only
+			                  FILE_ATTRIBUTE_NORMAL,  // normal file
+			                  NULL);                  // no attr. template
+
+	DWORD dwBytesWritten = 0;
+	WriteFile(
+			hFile,           // open file handle
+			str,      // start of data to write
+			strlen(str),  // number of bytes to write
+			&dwBytesWritten, // number of bytes that were written
+			NULL);            // no overlapped structure
+
+	CloseHandle(hFile);
+}*/
+
+
+HBITMAP getImage(int img_num, HDC hdc) {
+	HRSRC hrsrc = FindResource(hInstance_GL, TEXT("ZIPFILE"), RT_RCDATA);
+	if (hrsrc == NULL) {
+		return NULL;
+	}
+	DWORD size = SizeofResource(hInstance_GL, hrsrc);
+	if (size == 0) {
+		return NULL;
+	}
+	HGLOBAL hglob = LoadResource(hInstance_GL, hrsrc);
+	if (hglob == NULL) {
+		return NULL;
+	}
+	void *buf = LockResource(hglob);
+	if (buf == NULL) {
+		return NULL;
+	}
+	HZIP hzip = OpenZip(buf, size, ZIP_MEMORY);
+	if (hzip == NULL) {
+		return NULL;
+	}
+
+	char image_name[100] = {0};
+	c99_snprintf(image_name, sizeof(image_name), "%d.bmp", img_num);
+
+	ZIPENTRY zip_entry = {0};
+	int index = 0;
+	FindZipItem(hzip, image_name, TRUE, &index, &zip_entry);
+	if (index == -1) {
+		return NULL;
+	}
+
+	char *image_buf = (char *) malloc(zip_entry.unc_size);
+	if (image_buf == NULL) {
+		return NULL;
+	}
+
+	long unc_size = zip_entry.unc_size;
+	DWORD zip_result = UnzipItem(hzip, index, image_buf, zip_entry.unc_size, ZIP_MEMORY);
+	while (zip_result == ZR_MORE) {
+		unc_size++;
+		zip_result = UnzipItem(hzip, index, image_buf, unc_size, ZIP_MEMORY);
+	}
+
+	if (zip_result != ZR_OK) {
+		char str[100] = {0};
+		c99_snprintf(str, sizeof(str), "ZIP error: %lu; index: %d; unc_size: %lu\n", zip_result, index, zip_entry.unc_size);
+
+		return NULL;
+	}
+
+	CloseZip(hzip);
+
+
+
+	if (unc_size < sizeof(BITMAPFILEHEADER)) {
+		return NULL;
+	}
+
+	// Parse BMP headers
+	const BITMAPFILEHEADER *fileHeader = (BITMAPFILEHEADER *) image_buf;
+	if (fileHeader->bfType != 0x4D42) { // Check if 'BM'
+		return NULL;
+	}
+
+	const BITMAPINFOHEADER *infoHeader = (BITMAPINFOHEADER *)((BYTE *) image_buf + sizeof(BITMAPFILEHEADER));
+	const void *pixelData = (BYTE *) image_buf + fileHeader->bfOffBits;
+
+	// Create the DIB Bitmap
+	return CreateDIBitmap(
+			hdc,
+			infoHeader,                // Bitmap information
+			CBM_INIT,                  // Initialize bitmap with data
+			pixelData,                 // Pointer to the actual pixel data
+			(BITMAPINFO *)infoHeader,  // Pointer to bitmap information
+			DIB_RGB_COLORS             // RGB color format
+	);
+}
+
 LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	static HBITMAP hBitmap = {0};
 	HDC hdc = NULL;
 	PAINTSTRUCT ps = {0};
 	BITMAP bitmap = {0};
-	HDC hdcMem = NULL;
+	HDC hdc_mem = NULL;
 	HGDIOBJ oldBitmap = NULL;
 
 	switch (msg) {
 		case WM_CREATE: {
 			ss.hwnd = hwnd;
+			GetCursorPos(&ss.InitCursorPos);
+			ss.InitTime = GetTickCount();
 
-			SetTimer(hwnd, 0, 33, NULL); // 30 FPS
+			ss.idTimer = SetTimer(hwnd, 0, 33, NULL); // 1 s / 30 FPS = 33ms
 
 			return 0;
 		}
@@ -171,61 +302,72 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 			return 0;
 		}
 		case WM_PAINT: {
-			char cwd[MAX_PATH] = {0};
-			GetCurrentDirectory(sizeof(cwd), cwd);
-			char image_path[MAX_PATH] = {0};
-			snprintf(image_path, sizeof(image_path), "%s\\Edw590SCR\\%d.bmp", cwd, image_num_GL);
+			hdc = BeginPaint(hwnd, &ps);
+			if (hdc == NULL) {
+				return 0;
+			}
 
-			hBitmap = (HBITMAP) LoadImage(NULL, TEXT(image_path), IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+			hdc_mem = CreateCompatibleDC(hdc);
+			if (hdc_mem == NULL) {
+				return 0;
+			}
+
+			hBitmap = getImage(image_num_GL, hdc);
 
 			if (hBitmap == NULL) {
 				return 0;
 			}
 
-			hdc = BeginPaint(hwnd, &ps);
-
-			hdcMem = CreateCompatibleDC(hdc);
-			oldBitmap = SelectObject(hdcMem, hBitmap);
-
-			GetObject(hBitmap, sizeof(bitmap), &bitmap);
-
-			int monitor_width = 0;
-			int monitor_height = 0;
-			for (int i = 0; i < num_monitors_GL; i++) {
-				if (monitors_GL[i].hWnd == hwnd) {
-					monitor_width = monitors_GL[i].width;
-					monitor_height = monitors_GL[i].height;
-
-					break;
-				}
+			oldBitmap = SelectObject(hdc_mem, hBitmap);
+			if (oldBitmap == NULL) {
+				return 0;
 			}
 
+			if (GetObject(hBitmap, sizeof(bitmap), &bitmap) == 0) {
+				return 0;
+			}
+
+			RECT rect;
+			if (!GetWindowRect(hwnd, &rect)) {
+				return 0;
+			}
+			int window_width = rect.right - rect.left;
+			int window_height = rect.bottom - rect.top;
+
 			double aspect_ratio = (double) bitmap.bmWidth / bitmap.bmHeight;
-			int image_width = (int) (monitor_height * aspect_ratio);
-			int x = monitor_width / 2 - image_width / 2;
-			StretchBlt(hdc, x, 0, image_width, monitor_height, hdcMem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, SRCCOPY);
+			int image_width = (int) (window_height * aspect_ratio);
+			int x = window_width / 2 - image_width / 2;
+			if (!StretchBlt(hdc, x, 0, image_width, window_height, hdc_mem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, SRCCOPY)) {
+				return 0;
+			}
 
-			SelectObject(hdcMem, oldBitmap);
-			DeleteDC(hdcMem);
+			if (SelectObject(hdc_mem, oldBitmap) == NULL) {
+				return 0;
+			}
+			if (!DeleteDC(hdc_mem)) {
+				return 0;
+			}
 
-			EndPaint(hwnd, &ps);
+			if (!EndPaint(hwnd, &ps)) {
+				return 0;
+			}
 
 			return 0;
 		}
 		case WM_ACTIVATE:
 		case WM_ACTIVATEAPP:
-		case WM_NCACTIVATE: {
+		/*case WM_NCACTIVATE: {
 			if (scr_mode_GL == MODE_SAVER && !ss.IsDialogActive && LOWORD(wParam) == WA_INACTIVE) {
 				CloseSaverWindow();
 			}
 
 			return 0;
-		}
+		}*/
 		case WM_SETCURSOR: {
 			if (scr_mode_GL == MODE_SAVER && !ss.IsDialogActive) {
 				SetCursor(NULL);
 			} else {
-				SetCursor(LoadCursor(NULL,IDC_ARROW));
+				SetCursor(LoadCursor(NULL, IDC_ARROW));
 			}
 
 			return FALSE;
@@ -326,7 +468,7 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMoni
 }
 
 void DoSaver(HWND hparwnd) {
-	WNDCLASS wnd_class;
+	WNDCLASS wnd_class = {0};
 	wnd_class.style = CS_HREDRAW | CS_VREDRAW;
 	wnd_class.lpfnWndProc = SaverWindowProc;
 	wnd_class.cbClsExtra = 0;
@@ -334,7 +476,7 @@ void DoSaver(HWND hparwnd) {
 	wnd_class.hInstance = hInstance_GL;
 	wnd_class.hIcon = NULL;
 	wnd_class.hCursor = NULL;
-	wnd_class.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+	wnd_class.hbrBackground = (HBRUSH) GetStockObject(BLACK_BRUSH);
 	wnd_class.lpszMenuName = NULL;
 	wnd_class.lpszClassName = "ScrClass";
 
@@ -345,7 +487,7 @@ void DoSaver(HWND hparwnd) {
 	HWND hScrWindow = NULL;
 	if (scr_mode_GL == MODE_PREVIEW) {
 		RECT rc;
-		GetWindowRect(hparwnd,&rc);
+		GetWindowRect(hparwnd, &rc);
 		int cx = rc.right - rc.left;
 		int cy = rc.bottom - rc.top;
 		hScrWindow = CreateWindowExA(0, "ScrClass", "Edw590", WS_CHILD | WS_VISIBLE, 0, 0, cx, cy, hparwnd, NULL,
@@ -353,12 +495,19 @@ void DoSaver(HWND hparwnd) {
 	} else {
 		EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, 0);
 		for (int i = 0; i < num_monitors_GL; i++) {
-			struct MonitorInfo *monitor = &monitors_GL[i];
-			hScrWindow = CreateWindowExA(WS_EX_TOPMOST, "ScrClass", "Edw590", WS_POPUP | WS_VISIBLE, monitor->x,
-											monitor->y, monitor->width, monitor->height, NULL, NULL, hInstance_GL, NULL);
-			ShowWindow(hScrWindow, SW_SHOW);
-
-			monitor->hWnd = hScrWindow;
+			struct MonitorInfo *monitor_info = &monitors_GL[i];
+			hScrWindow = CreateWindowExA(WS_EX_TOPMOST,
+			                             "ScrClass",
+			                             "Edw590",
+										 WS_POPUP | WS_VISIBLE,
+										 monitor_info->x,
+										 monitor_info->y,
+										 monitor_info->width,
+										 monitor_info->height,
+										 NULL,
+										 NULL,
+										 hInstance_GL,
+										 NULL);
 		}
 	}
 
@@ -382,53 +531,9 @@ void DoSaver(HWND hparwnd) {
 	}
 }
 
-// This routine is for using ScrPrev. It's so that you can start the saver
-// with the command line /p scrprev and it runs itself in a preview window.
-// You must first copy ScrPrev somewhere in your search path
-HWND CheckForScrprev() {
-	HWND hwnd = FindWindow("Scrprev", NULL); // looks for the Scrprev class
-	if (hwnd == NULL) {
-		// try to load it
-		STARTUPINFO si;
-		PROCESS_INFORMATION pi;
-		ZeroMemory(&si, sizeof(si));
-		ZeroMemory(&pi, sizeof(pi));
-
-		si.cb = sizeof(si);
-		si.lpReserved = NULL;
-		si.lpTitle = NULL;
-		si.dwFlags = 0;
-		si.cbReserved2 = 0;
-		si.lpReserved2 = 0;
-		si.lpDesktop = 0;
-		BOOL cres = CreateProcess(NULL, "Scrprev", 0, 0, FALSE, CREATE_NEW_PROCESS_GROUP | CREATE_DEFAULT_ERROR_MODE,
-								  0, 0, &si, &pi);
-		if (!cres) {
-			return NULL;
-		}
-
-		DWORD wres = WaitForInputIdle(pi.hProcess, 2000);
-		if (wres == WAIT_TIMEOUT) {
-			return NULL;
-		}
-		if (wres == 0xFFFFFFFF) {
-			return NULL;
-		}
-		hwnd = FindWindow("Scrprev", NULL);
-	}
-	if (hwnd==NULL) {
-		return NULL;
-	}
-	SetForegroundWindow(hwnd);
-	hwnd = GetWindow(hwnd, GW_CHILD);
-	if (hwnd == NULL) {
-		return NULL;
-	}
-
-	return hwnd;
-}
-
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
+	ss.MouseThreshold = 4;
+
 	hInstance_GL = hInstance;
 	char *c = GetCommandLine();
 	if (*c == '\"') {
@@ -451,7 +556,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	HWND hwnd = NULL;
 	if (*c == '\0') {
 		scr_mode_GL = MODE_SAVER;
-		hwnd = NULL;
 	} else {
 		if (*c == '-' || *c == '/') {
 			c++;
@@ -461,12 +565,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			while (*c == ' ' || *c == ':') {
 				c++;
 			}
-			if ((strcmp(c, "scrprev") == 0) || (strcmp(c, "ScrPrev") == 0) || (strcmp(c, "SCRPREV") == 0)) {
-				hwnd = CheckForScrprev();
-			} else {
-				hwnd = (HWND) atoi(c);
-			}
-
+			hwnd = (HWND) atoi(c);
 			scr_mode_GL = MODE_PREVIEW;
 		} else if (*c=='s' || *c=='S') {
 			scr_mode_GL = MODE_SAVER;
@@ -481,7 +580,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				hwnd=(HWND) atoi(c);
 			}
 
-			MessageBoxPrintf("Edw590", "This screensaver does not support configuration.");
+			MessageBoxPrintf("Edw590 Screensaver", "This screensaver does not support configuration.");
 		} else if (*c=='a' || *c=='A') {
 			c++;
 			while (*c==' ' || *c==':') {

@@ -1,13 +1,14 @@
 cmake_minimum_required(VERSION 3.28)
-project(MyScreensaver C)
+project(Edw590SCR)
 
-set(CMAKE_C_STANDARD 23)
+set(CMAKE_CXX_STANDARD 26)
 
-# To include libraries like the CRT statically
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+# Dummy file just for CLion to understand the project - use VS 2005 to compile it.
 
-add_executable(MinimalScr WIN32
+add_executable(Edw590SCR WIN32
         main.c
-        Utils/General.c
-        Utils/General.h
+        GeneralUtils.c
+        GeneralUtils.h
+        unzip.cpp
+        unzip.h
 )

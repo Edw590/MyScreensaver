@@ -3,6 +3,7 @@
 
 cmake-*/
 .idea/
+Debug/
 
 UsefulPrivate/
 
