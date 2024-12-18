@@ -294,14 +294,6 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 			GetCursorPos(&ss.InitCursorPos);
 			ss.InitTime = GetTickCount();
 
-			// Load images to memory
-			for (int i = 0; i < sizeof(images_GL) / sizeof(images_GL[0]); i++) {
-				hdc = GetDC(hwnd);
-				images_GL[i] = getImage(i, hdc);
-				ReleaseDC(hwnd, hdc);
-				hdc = NULL;
-			}
-
 			ss.idTimer = SetTimer(hwnd, 0, 33, NULL); // 1 s / 30 FPS = 33ms
 
 			return 0;
@@ -328,6 +320,10 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 			}
 
 			hBitmap = images_GL[image_num_GL];
+			if (hBitmap == NULL) {
+				hBitmap = getImage(image_num_GL, hdc);
+				images_GL[image_num_GL] = hBitmap;
+			}
 
 			if (hBitmap == NULL) {
 				return 0;
