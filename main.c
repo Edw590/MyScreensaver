@@ -302,7 +302,7 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 			return 0;
 		}
 		case WM_TIMER: {
-			InvalidateRect(hwnd, NULL, FALSE);
+			InvalidateRect(hwnd, NULL, TRUE);
 
 			return 0;
 		}
