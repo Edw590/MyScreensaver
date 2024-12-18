@@ -517,7 +517,7 @@ void DoSaver(HWND hparwnd) {
 										 WS_POPUP | WS_VISIBLE,
 										 monitor_info->x,
 										 monitor_info->y,
-										 1000, // TODO: monitor_info->width,
+										 monitor_info->width,
 										 monitor_info->height,
 										 NULL,
 										 NULL,
