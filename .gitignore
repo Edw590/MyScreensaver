@@ -1,10 +1,17 @@
 ###############################
 # My things
 
+# JetBrains stuff
 cmake-*/
 .idea/
-Debug/
 
+# Visual Studio 2005 stuff
+Debug/
+*.ncb
+*.suo
+*.user
+
+# My stuff
 UsefulPrivate/
 
 ###############################

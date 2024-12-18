@@ -40,6 +40,8 @@
 
 // Original code obtained from: https://www.wischik.com/scr/howtoscr.html.
 // Modified by me, Edw590 in 2024.
+//
+// Note: this is now a Visual Studio 2005 project.
 
 #include <stdio.h>
 #include <windows.h>
@@ -80,6 +82,8 @@ struct MonitorInfo {
 
 int num_monitors_GL = 0;
 struct MonitorInfo monitors_GL[MAX_MONITORS_EDW590] = {0};
+
+HBITMAP images_GL[80] = {0};
 
 
 // The 2 functions below were copied from https://stackoverflow.com/a/8712996/8228163.
@@ -193,7 +197,6 @@ void EndDialog2() {
 	CloseHandle(hFile);
 }*/
 
-
 HBITMAP getImage(int img_num, HDC hdc) {
 	HRSRC hrsrc = FindResource(hInstance_GL, TEXT("ZIPFILE"), RT_RCDATA);
 	if (hrsrc == NULL) {
@@ -287,6 +290,14 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 			GetCursorPos(&ss.InitCursorPos);
 			ss.InitTime = GetTickCount();
 
+			// Load images to memory
+			for (int i = 0; i < sizeof(images_GL) / sizeof(images_GL[0]); i++) {
+				hdc = GetDC(hwnd);
+				images_GL[i] = getImage(i, hdc);
+				ReleaseDC(hwnd, hdc);
+				hdc = NULL;
+			}
+
 			ss.idTimer = SetTimer(hwnd, 0, 33, NULL); // 1 s / 30 FPS = 33ms
 
 			return 0;
@@ -312,7 +323,7 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 				return 0;
 			}
 
-			hBitmap = getImage(image_num_GL, hdc);
+			hBitmap = images_GL[image_num_GL];
 
 			if (hBitmap == NULL) {
 				return 0;
@@ -502,7 +513,7 @@ void DoSaver(HWND hparwnd) {
 										 WS_POPUP | WS_VISIBLE,
 										 monitor_info->x,
 										 monitor_info->y,
-										 monitor_info->width,
+										 1000, // TODO: monitor_info->width,
 										 monitor_info->height,
 										 NULL,
 										 NULL,
