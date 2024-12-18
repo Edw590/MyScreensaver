@@ -18,8 +18,8 @@
 // under the License.
 
 #include <stdio.h>
-#include <windows.h>
-#include "GeneralUtils.h"
+#include <Windows.h>
+#include "General.h"
 
 int MessageBoxPrintf(TCHAR * szCaption, TCHAR * szFormat, ...) {
 	TCHAR szBuffer [1024];

@@ -7,8 +7,8 @@ set(CMAKE_CXX_STANDARD 26)
 
 add_executable(Edw590SCR WIN32
         main.c
-        GeneralUtils.c
-        GeneralUtils.h
-        unzip.cpp
-        unzip.h
+        Utils/General.c
+        Utils/General.h
+        Utils/unzip.cpp
+        Utils/unzip.h
 )

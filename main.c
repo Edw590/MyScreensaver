@@ -46,8 +46,8 @@
 #include <stdio.h>
 #include <windows.h>
 #include <time.h>
-#include "GeneralUtils.h"
-#include "unzip.h"
+#include "Utils/General.h"
+#include "Utils/unzip.h"
 
 #define MAX_MONITORS_EDW590 100
 
@@ -557,7 +557,8 @@ void DoSaver(HWND hparwnd) {
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
-	ss.MouseThreshold = 4;
+	ss.MouseThreshold = 5;
+	ss.PasswordDelay = 15;
 
 	hInstance_GL = hInstance;
 	char *c = GetCommandLine();
