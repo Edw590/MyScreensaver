@@ -345,11 +345,25 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 			int window_width = rect.right - rect.left;
 			int window_height = rect.bottom - rect.top;
 
-			double aspect_ratio = (double) bitmap.bmWidth / bitmap.bmHeight;
-			int image_width = (int) (window_height * aspect_ratio);
-			int x = window_width / 2 - image_width / 2;
-			if (!StretchBlt(hdc, x, 0, image_width, window_height, hdc_mem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, SRCCOPY)) {
-				return 0;
+			if (window_width >= window_height) {
+				// If the window is wider than it is tall, we need to center the image horizontally and stretch it
+				// vertically to fill the window
+				double aspect_ratio = (double) bitmap.bmWidth / bitmap.bmHeight;
+				int image_width = (int) (window_height * aspect_ratio);
+				int x = window_width / 2 - image_width / 2;
+				if (!StretchBlt(hdc, x, 0, image_width, window_height, hdc_mem, 0, 0, bitmap.bmWidth, bitmap.bmHeight,
+				                SRCCOPY)) {
+					return 0;
+				}
+			} else {
+				// Else, opposite of the above.
+				double aspect_ratio = (double) bitmap.bmHeight / bitmap.bmWidth;
+				int image_height = (int) (window_width * aspect_ratio);
+				int y = window_height / 2 - image_height / 2;
+				if (!StretchBlt(hdc, 0, y, window_width, image_height, hdc_mem, 0, 0, bitmap.bmWidth, bitmap.bmHeight,
+								SRCCOPY)) {
+					return 0;
+				}
 			}
 
 			if (SelectObject(hdc_mem, oldBitmap) == NULL) {
