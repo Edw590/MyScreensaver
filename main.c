@@ -365,9 +365,9 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 
 			return 0;
 		}
-		case WM_ACTIVATE:
+		/*case WM_ACTIVATE:
 		case WM_ACTIVATEAPP:
-		/*case WM_NCACTIVATE: {
+		case WM_NCACTIVATE: {
 			if (scr_mode_GL == MODE_SAVER && !ss.IsDialogActive && LOWORD(wParam) == WA_INACTIVE) {
 				CloseSaverWindow();
 			}
