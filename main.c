@@ -266,7 +266,7 @@ HBITMAP getImage(int img_num, HDC hdc) {
 	const void *pixelData = (BYTE *) image_buf + fileHeader->bfOffBits;
 
 	// Create the DIB Bitmap
-	return CreateDIBitmap(
+	HBITMAP hbitmap = CreateDIBitmap(
 			hdc,
 			infoHeader,                // Bitmap information
 			CBM_INIT,                  // Initialize bitmap with data
@@ -274,6 +274,10 @@ HBITMAP getImage(int img_num, HDC hdc) {
 			(BITMAPINFO *)infoHeader,  // Pointer to bitmap information
 			DIB_RGB_COLORS             // RGB color format
 	);
+
+	free(image_buf);
+
+	return hbitmap;
 }
 
 LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
