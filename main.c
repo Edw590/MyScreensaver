@@ -45,6 +45,7 @@
 
 #include <stdio.h>
 #include <windows.h>
+#include <time.h>
 #include "GeneralUtils.h"
 #include "unzip.h"
 
@@ -296,14 +297,11 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 
 			ss.idTimer = SetTimer(hwnd, 0, 33, NULL); // 1 s / 30 FPS = 33ms
 
+			srand(time(NULL));
+
 			return 0;
 		}
 		case WM_TIMER: {
-			image_num_GL++;
-			if (image_num_GL > 79) {
-				image_num_GL = 0;
-			}
-
 			InvalidateRect(hwnd, NULL, FALSE);
 
 			return 0;
@@ -319,6 +317,8 @@ LRESULT CALLBACK SaverWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 				return 0;
 			}
 
+			// Pick a random frame (number between 0 and 79)
+			image_num_GL = rand() % 80;
 			hBitmap = images_GL[image_num_GL];
 			if (hBitmap == NULL) {
 				hBitmap = getImage(image_num_GL, hdc);
